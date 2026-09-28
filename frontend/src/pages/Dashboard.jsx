@@ -1,112 +1,276 @@
 import { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
 
 function Dashboard() {
-  const user =
-    JSON.parse(
-      localStorage.getItem(
-        "quickserveUser"
-      ) || "null"
-    );
+  const navigate = useNavigate();
 
-  const [counts, setCounts] =
-    useState({
-      services: null,
-      bookings: null,
-      reviews: null,
-      users: null
-    });
+  // 1. Initialize user state once to prevent re-parsing on every render
+  const [user] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("quickserveUser") || "null");
+    } catch {
+      return null;
+    }
+  });
+
+  const [customerBookings, setCustomerBookings] = useState([]);
+  const [customerReviews, setCustomerReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [s, b, r, u] =
-          await Promise.all([
-            fetch("http://localhost:5000/api/services")
-              .then((res) => res.json())
-              .then((d) => (Array.isArray(d) ? d.length : (d?.length ?? d?.total ?? 0)))
-              .catch(() => null),
-            fetch("http://localhost:5000/api/bookings")
-              .then((res) => res.json())
-              .then((d) => (Array.isArray(d) ? d.length : (d?.length ?? 0)))
-              .catch(() => null),
-            fetch("http://localhost:5000/api/reviews")
-              .then((res) => res.json())
-              .then((d) => (Array.isArray(d) ? d.length : (d?.length ?? 0)))
-              .catch(() => null),
-            fetch("http://localhost:5000/api/users")
-              .then((res) => res.json())
-              .then((d) => (Array.isArray(d) ? d.length : (d?.length ?? 0)))
-              .catch(() => null)
-          ]);
+    // 2. Redirect unauthenticated users
+    if (!user) {
+      navigate("/login");
+      return;
+    }
 
-        setCounts({ services: s, bookings: b, reviews: r, users: u });
+    // 3. Setup AbortController to handle unmounting/race conditions
+    const controller = new AbortController();
+
+    async function loadCustomerData() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const token = localStorage.getItem("token") || user.token;
+        const headers = {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` })
+        };
+
+        // Run both requests concurrently
+        const [bookingsRes, reviewsRes] = await Promise.all([
+          user.role === "customer"
+            ? fetch(`http://localhost:5000/api/bookings/customer/${user._id}`, {
+                signal: controller.signal,
+                headers
+              })
+            : Promise.resolve(null),
+          fetch(`http://localhost:5000/api/reviews`, {
+            signal: controller.signal,
+            headers
+          })
+        ]);
+
+        if (bookingsRes && bookingsRes.ok) {
+          const bookings = await bookingsRes.json();
+          setCustomerBookings(Array.isArray(bookings) ? bookings : []);
+        }
+
+        if (reviewsRes && reviewsRes.ok) {
+          const allReviews = await reviewsRes.json();
+          if (Array.isArray(allReviews)) {
+            const myReviews = allReviews.filter(
+              (r) => r.customer?._id === user._id || r.customer === user._id
+            );
+            setCustomerReviews(myReviews);
+          }
+        }
       } catch (err) {
-        // ignore; show placeholders
+        if (err.name !== "AbortError") {
+          console.error("Error loading dashboard data:", err);
+          setError("Failed to load dashboard data. Please try again.");
+        }
+      } finally {
+        setLoading(false);
       }
     }
 
-    load();
-  }, []);
+    loadCustomerData();
+
+    return () => controller.abort();
+  }, [user, navigate]);
+
+  if (!user) {
+    return (
+      <div className="empty-state">
+        <h2>Please login to view your profile</h2>
+      </div>
+    );
+  }
+
+  const getStatusColor = (status) => {
+    const statusMap = {
+      Pending: "#fbbf24",
+      Accepted: "#60a5fa",
+      "In Progress": "#c084fc",
+      Completed: "#34d399",
+      Rejected: "#f87171",
+      Cancelled: "#f87171"
+    };
+    return statusMap[status] || "#6b7280";
+  };
+
+  const totalBookings = customerBookings.length;
+  const completedBookings = customerBookings.filter(
+    (b) => b.status === "Completed"
+  ).length;
+  const pendingBookings = customerBookings.filter(
+    (b) => b.status === "Pending"
+  ).length;
 
   return (
-    <div className="dashboard">
-
-      <div className="dashboard-header">
-        <span>Welcome</span>
-        <h1>{user?.name || "Guest"}</h1>
-        <p>Overview of your QuickServe account</p>
+    <div className="customer-dashboard">
+      {/* Profile Header */}
+      <div className="profile-header">
+        <div className="profile-avatar-large">
+          {user.name?.charAt(0)?.toUpperCase() || "U"}
+        </div>
+        <div className="profile-details">
+          <h1>{user.name || "User"}</h1>
+          <p>📍 {user.location || "Location not set"}</p>
+          <p>📧 {user.email || "No email"}</p>
+          <p>📞 {user.phone || "No phone"}</p>
+          <span className="user-role">
+            {user.role === "customer" ? "👤 Customer" : "👨‍💼 Provider"}
+          </span>
+        </div>
       </div>
 
-      <div className="dashboard-stats">
+      {error && <div className="error-banner">{error}</div>}
 
-        <div className="dashboard-stat">
-          <div className="dashboard-stat-icon">🛠️</div>
-          <strong>{counts.services ?? "—"}</strong>
-          <span>Services</span>
+      {/* Stats Cards - Customer Specific */}
+      {user.role === "customer" && (
+        <div className="customer-stats">
+          <div className="stat-card">
+            <div className="stat-icon">📅</div>
+            <div className="stat-content">
+              <strong>{totalBookings}</strong>
+              <span>Total Bookings</span>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">✅</div>
+            <div className="stat-content">
+              <strong>{completedBookings}</strong>
+              <span>Completed</span>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">⏳</div>
+            <div className="stat-content">
+              <strong>{pendingBookings}</strong>
+              <span>Pending</span>
+            </div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-icon">⭐</div>
+            <div className="stat-content">
+              <strong>{customerReviews.length}</strong>
+              <span>Reviews Left</span>
+            </div>
+          </div>
         </div>
+      )}
 
-        <div className="dashboard-stat">
-          <div className="dashboard-stat-icon">📅</div>
-          <strong>{counts.bookings ?? "—"}</strong>
-          <span>Bookings</span>
+      {/* Recent Bookings Section */}
+      {user.role === "customer" && (
+        <div className="dashboard-section">
+          <h2>Your Recent Bookings</h2>
+          {loading ? (
+            <p>Loading...</p>
+          ) : customerBookings.length === 0 ? (
+            <div className="empty-section">
+              <p>No bookings yet. Browse services to get started!</p>
+              <Link to="/services" className="cta-link">
+                Browse Services
+              </Link>
+            </div>
+          ) : (
+            <div className="bookings-grid">
+              {customerBookings.slice(0, 6).map((booking) => (
+                <div key={booking._id} className="booking-item">
+                  <div className="booking-header">
+                    <h3>{booking.service?.title || "Untitled Service"}</h3>
+                    <span
+                      className="booking-status"
+                      style={{
+                        backgroundColor: getStatusColor(booking.status),
+                        color: "white"
+                      }}
+                    >
+                      {booking.status || "Unknown"}
+                    </span>
+                  </div>
+
+                  <div className="booking-details-list">
+                    <p>
+                      💰 <strong>₹{booking.service?.price ?? "N/A"}</strong>
+                    </p>
+                    <p>
+                      📅 <strong>{booking.bookingDate || "Date not set"}</strong>
+                    </p>
+                    {booking.bookingTime && (
+                      <p>
+                        🕐 <strong>{booking.bookingTime}</strong>
+                      </p>
+                    )}
+                    <p>
+                      👨‍💼{" "}
+                      <strong>
+                        {booking.provider?.name || "Provider unassigned"}
+                      </strong>
+                    </p>
+                    <p>
+                      📍 <strong>{booking.address || "Address not provided"}</strong>
+                    </p>
+                  </div>
+
+                  {booking.status === "Completed" && (
+                    <div className="booking-action">
+                      <small>✅ Service completed</small>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+      )}
 
-        <div className="dashboard-stat">
-          <div className="dashboard-stat-icon">⭐</div>
-          <strong>{counts.reviews ?? "—"}</strong>
-          <span>Reviews</span>
-        </div>
+      {/* Reviews Section */}
+      <div className="dashboard-section">
+        <h2>Your Reviews</h2>
+        {loading ? (
+          <p>Loading...</p>
+        ) : customerReviews.length === 0 ? (
+          <div className="empty-section">
+            <p>
+              {user.role === "customer"
+                ? "Complete a booking and leave a review!"
+                : "No reviews yet"}
+            </p>
+          </div>
+        ) : (
+          <div className="reviews-grid">
+            {customerReviews.map((review) => (
+              <div key={review._id} className="review-card">
+                <div className="review-header-card">
+                  <div>
+                    <h4>{review.service?.title || "Review"}</h4>
+                    <small>{review.service?.category || ""}</small>
+                  </div>
+                  <span className="review-rating-badge">
+                    ⭐ {review.rating}/5
+                  </span>
+                </div>
 
-        <div className="dashboard-stat">
-          <div className="dashboard-stat-icon">👥</div>
-          <strong>{counts.users ?? "—"}</strong>
-          <span>Users</span>
-        </div>
+                <p className="review-text">"{review.comment}"</p>
 
+                <small className="review-date">
+                  {review.createdAt
+                    ? new Date(review.createdAt).toLocaleDateString()
+                    : ""}
+                </small>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-
-      <div className="dashboard-grid">
-
-        <div className="dashboard-card">
-          <h2>Your Profile</h2>
-          <p>
-            {user
-              ? `Name: ${user.name} — Role: ${user.role}`
-              : "Please login to view profile."}
-          </p>
-        </div>
-
-        <div className="dashboard-card">
-          <h2>Quick Actions</h2>
-          <p>
-            {user?.role === "provider"
-              ? "Add or manage your services from the Add Service page."
-              : "Browse services and make bookings."}
-          </p>
-        </div>
-
-      </div>
-
     </div>
   );
 }

@@ -9,6 +9,12 @@ const User = require("./models/User");
 
 const Service = require("./models/Service");
 const Booking = require("./models/Booking");
+const Review = require("./models/Review");
+
+// Import route files
+const bookingRoutes = require("./routes/bookingRoutes");
+const serviceRoutes = require("./routes/serviceRoutes");
+const reviewRoutes = require("./routes/ReviewRoutes");
 
 const app = express();
 
@@ -64,13 +70,111 @@ app.get("/api/users/:id", async (req, res) => {
 
 
 // Add user / Register
-app.post("/api/users", async (req, res) => {
-  const newUser = await User.create(req.body);
+app.post("/api/users/register", async (req, res) => {
+  try {
+    // allow providers to send servicesProvided (comma-separated or array) and locationCoords
+    const payload = { ...req.body };
 
-  res.json({
-    message: "User registered successfully!",
-    user: newUser
-  });
+    if (payload.servicesProvided && typeof payload.servicesProvided === "string") {
+      payload.servicesProvided = payload.servicesProvided
+        .split(",")
+        .map(s => s.trim())
+        .filter(Boolean);
+    }
+
+    // normalize locationCoords if provided as {lat,lng} or array
+    if (payload.locationCoords && Array.isArray(payload.locationCoords)) {
+      // expect [lng, lat]
+    } else if (payload.locationCoords && payload.locationCoords.latitude && payload.locationCoords.longitude) {
+      payload.locationCoords = {
+        type: "Point",
+        coordinates: [Number(payload.locationCoords.longitude), Number(payload.locationCoords.latitude)]
+      };
+    } else if (payload.latitude && payload.longitude) {
+      payload.locationCoords = {
+        type: "Point",
+        coordinates: [Number(payload.longitude), Number(payload.latitude)]
+      };
+    }
+
+    const newUser = await User.create(payload);
+
+    res.status(201).json({ message: "User registered successfully!", user: newUser });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// LOGIN
+app.post("/api/users/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email, password });
+
+    if (!user) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    res.json({ message: "Login successful", user });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// PROVIDER SEARCH
+// GET /api/providers/search?service=cleaning&lat=..&lng=..&radius=meters
+app.get("/api/providers/search", async (req, res) => {
+  try {
+    const { service, lat, lng, radius } = req.query;
+
+    const match = { role: "provider" };
+    if (service) {
+      // case-insensitive partial match against servicesProvided array elements
+      match.servicesProvided = { $regex: service, $options: "i" };
+    }
+
+    let providers;
+
+    if (lat && lng) {
+      const coords = [Number(lng), Number(lat)];
+      const maxDistance = Number(radius || 5000);
+
+      providers = await User.aggregate([
+        {
+          $geoNear: {
+            near: { type: "Point", coordinates: coords },
+            distanceField: "dist.calculated",
+            spherical: true,
+            maxDistance
+          }
+        },
+        { $match: match },
+        { $project: { password: 0 } },
+        { $limit: 50 }
+      ]);
+    } else {
+      providers = await User.find(match).select("-password").limit(50);
+    }
+
+    res.json(providers);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get provider profile
+app.get("/api/providers/:id", async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select("-password");
+    if (!user || user.role !== "provider") {
+      return res.status(404).json({ message: "Provider not found" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 });
 
 
@@ -96,6 +200,7 @@ app.put("/api/users/:id", async (req, res) => {
 
 
 // Delete user
+// auth middleware
 app.delete("/api/users/:id", async (req, res) => {
   const deletedUser = await User.findByIdAndDelete(
     req.params.id
@@ -117,221 +222,21 @@ app.delete("/api/users/:id", async (req, res) => {
 // SERVICE APIs
 // ======================================================
 
-// Get all services
-app.get("/api/services", async (req, res) => {
-  const services = await Service.find();
-  res.json(services);
-});
-
-
-// Get service by ID
-app.get("/api/services/:id", async (req, res) => {
-  const service = await Service.findById(req.params.id);
-
-  if (!service) {
-    return res.status(404).json({
-      message: "Service Not Found!"
-    });
-  }
-
-  res.json(service);
-});
-
-
-// Add service
-app.post("/api/services", async (req, res) => {
-  const newService = await Service.create(req.body);
-
-  res.json({
-    message: "Service added successfully!",
-    service: newService
-  });
-});
-
-
-// Update service
-app.put("/api/services/:id", async (req, res) => {
-  const updatedService = await Service.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true }
-  );
-
-  if (!updatedService) {
-    return res.status(404).json({
-      message: "Service not found!"
-    });
-  }
-
-  res.json({
-    message: "Service updated successfully!",
-    service: updatedService
-  });
-});
-
-
-// Delete service
-app.delete("/api/services/:id", async (req, res) => {
-  const deletedService = await Service.findByIdAndDelete(
-    req.params.id
-  );
-
-  if (!deletedService) {
-    return res.status(404).json({
-      message: "Service Not Found!"
-    });
-  }
-
-  res.json({
-    message: "Service deleted successfully"
-  });
-});
+app.use("/api/services", serviceRoutes);
 
 
 // ======================================================
 // BOOKING APIs
 // ======================================================
 
-// Get all bookings
-app.get("/api/bookings", async (req, res) => {
-  const bookings = await Booking.find();
-  res.json(bookings);
-});
-
-
-// Get booking by ID
-app.get("/api/bookings/:id", async (req, res) => {
-  const booking = await Booking.findById(req.params.id);
-
-  if (!booking) {
-    return res.status(404).json({
-      message: "Booking Not Found!"
-    });
-  }
-
-  res.json(booking);
-});
-
-
-// Add booking
-app.post("/api/bookings", async (req, res) => {
-  const newBooking = await Booking.create(req.body);
-
-  res.json({
-    message: "Booking created successfully!",
-    booking: newBooking
-  });
-});
-
-
-// Update booking
-app.put("/api/bookings/:id", async (req, res) => {
-  const updatedBooking = await Booking.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true }
-  );
-
-  if (!updatedBooking) {
-    return res.status(404).json({
-      message: "Booking not found!"
-    });
-  }
-
-  res.json({
-    message: "Booking updated successfully!",
-    booking: updatedBooking
-  });
-});
-
-
-// Delete booking
-app.delete("/api/bookings/:id", async (req, res) => {
-  const deletedBooking = await Booking.findByIdAndDelete(
-    req.params.id
-  );
-
-  if (!deletedBooking) {
-    return res.status(404).json({
-      message: "Booking Not Found!"
-    });
-  }
-
-  res.json({
-    message: "Booking deleted successfully"
-  });
-});
+app.use("/api/bookings", bookingRoutes);
 
 
 // ======================================================
 // REVIEW APIs
 // ======================================================
 
-// Get all reviews
-app.get("/api/reviews", async (req, res) => {
-  const reviews = await Review.find();
-  res.json(reviews);
-});
-
-
-// Get reviews for a particular service
-app.get("/api/reviews/service/:serviceId", async (req, res) => {
-  const reviews = await Review.find({
-    serviceId: req.params.serviceId
-  });
-
-  res.json(reviews);
-});
-
-
-// Add review
-app.post("/api/reviews", async (req, res) => {
-  const newReview = await Review.create(req.body);
-
-  res.json({
-    message: "Review added successfully!",
-    review: newReview
-  });
-});
-
-
-// Update review
-app.put("/api/reviews/:id", async (req, res) => {
-  const updatedReview = await Review.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true }
-  );
-
-  if (!updatedReview) {
-    return res.status(404).json({
-      message: "Review not found!"
-    });
-  }
-
-  res.json({
-    message: "Review updated successfully!",
-    review: updatedReview
-  });
-});
-
-
-// Delete review
-app.delete("/api/reviews/:id", async (req, res) => {
-  const deletedReview = await Review.findByIdAndDelete(
-    req.params.id
-  );
-
-  if (!deletedReview) {
-    return res.status(404).json({
-      message: "Review Not Found!"
-    });
-  }
-
-  res.json({
-    message: "Review deleted successfully"
-  });
-});
+app.use("/api/reviews", reviewRoutes);
 
 
 

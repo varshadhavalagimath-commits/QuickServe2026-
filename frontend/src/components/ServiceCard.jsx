@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 function ServiceCard({
   service,
@@ -262,25 +262,27 @@ function ServiceCard({
 
         </div>
 
-        <div className="provider">
+        <Link to={`/providers/${service.provider?._id}`} className="provider-link">
+          <div className="provider">
 
-          <div className="provider-avatar">
-            {service.provider?.name
-              ?.charAt(0)
-              ?.toUpperCase()}
+            <div className="provider-avatar">
+              {service.provider?.name
+                ?.charAt(0)
+                ?.toUpperCase()}
+            </div>
+
+            <div>
+              <strong>
+                {service.provider?.name}
+              </strong>
+
+              <small>
+                Service Provider
+              </small>
+            </div>
+
           </div>
-
-          <div>
-            <strong>
-              {service.provider?.name}
-            </strong>
-
-            <small>
-              Service Provider
-            </small>
-          </div>
-
-        </div>
+        </Link>
 
         <div className="service-bottom">
 

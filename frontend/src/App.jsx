@@ -14,6 +14,8 @@ import Services from "./pages/Services";
 import AddService from "./pages/AddService";
 import Dashboard from "./pages/Dashboard";
 import Bookings from "./pages/Bookings";
+import Providers from "./pages/Providers";
+import ProviderProfile from "./pages/ProviderProfile";
 
 import "./App.css";
 
@@ -61,6 +63,9 @@ function App() {
             path="/bookings"
             element={<Bookings />}
           />
+
+          <Route path="/providers" element={<Providers />} />
+          <Route path="/providers/:id" element={<ProviderProfile />} />
 
         </Routes>
 

@@ -104,6 +104,45 @@ router.get(
   }
 );
 
+// GET ALL BOOKINGS
+router.get("/", async (req, res) => {
+  try {
+    const bookings = await Booking.find()
+      .populate("service")
+      .populate("provider", "name email phone")
+      .populate("customer", "name email phone")
+      .sort({ createdAt: -1 });
+
+    res.json(bookings);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+});
+
+// GET BOOKING BY ID
+router.get("/:id", async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id)
+      .populate("service")
+      .populate("provider", "name email phone")
+      .populate("customer", "name email phone");
+
+    if (!booking) {
+      return res.status(404).json({
+        message: "Booking not found"
+      });
+    }
+
+    res.json(booking);
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+});
+
 // UPDATE STATUS
 router.put(
   "/:id/status",
@@ -136,5 +175,20 @@ router.put(
     }
   }
 );
+
+// DELETE BOOKING
+router.delete("/:id", async (req, res) => {
+  try {
+    await Booking.findByIdAndDelete(req.params.id);
+
+    res.json({
+      message: "Booking deleted successfully"
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+});
 
 module.exports = router;

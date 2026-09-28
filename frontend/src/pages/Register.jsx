@@ -15,6 +15,10 @@ function Register() {
       role: "customer"
     });
 
+  // add provider-specific form fields
+  const [services, setServices] = useState("");
+  const [coords, setCoords] = useState(null);
+
   function handleChange(e) {
 
     setForm({
@@ -42,12 +46,14 @@ function Register() {
             },
 
             body: JSON.stringify({
-             name,
-             email,
-             password,
-             phone,
-             location,
-              role
+              name: form.name,
+              email: form.email,
+              password: form.password,
+              phone: form.phone,
+              location: form.location,
+              role: form.role,
+              servicesProvided: services,
+              locationCoords: coords
            })
           }
         );
@@ -182,6 +188,37 @@ function Register() {
             </option>
 
           </select>
+
+          {form.role === "provider" && (
+            <>
+              <label>Services Provided (comma separated)</label>
+              <input
+                name="services"
+                placeholder="plumbing, cleaning"
+                value={services}
+                onChange={(e) => setServices(e.target.value)}
+              />
+
+              <label>Set my location</label>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!navigator.geolocation) return alert("Geolocation not supported");
+                    navigator.geolocation.getCurrentPosition((pos) => {
+                      const lat = pos.coords.latitude;
+                      const lng = pos.coords.longitude;
+                      setCoords({ latitude: lat, longitude: lng });
+                      setForm({ ...form, location: `${lat.toFixed(4)}, ${lng.toFixed(4)}` });
+                    });
+                  }}
+                >
+                  Use my GPS location
+                </button>
+                {coords && <span> Location captured</span>}
+              </div>
+            </>
+          )}
 
           <button
             className="auth-button"

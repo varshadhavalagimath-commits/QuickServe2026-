@@ -1,9 +1,7 @@
 import { Link, NavLink } from "react-router-dom";
 
 function Navbar() {
-  const user = JSON.parse(
-    localStorage.getItem("quickserveUser") || "null"
-  );
+  const user = JSON.parse(localStorage.getItem("quickserveUser") || "null");
 
   function handleLogout() {
     localStorage.removeItem("quickserveUser");
@@ -22,6 +20,11 @@ function Navbar() {
         <NavLink to="/services">Services</NavLink>
         <NavLink to="/bookings">Bookings</NavLink>
         <NavLink to="/dashboard">Dashboard</NavLink>
+        {user && user.role === "provider" && (
+          <NavLink to="/add-service" className="add-service-link">
+            + Add Service
+          </NavLink>
+        )}
       </div>
 
       <div className="nav-user">

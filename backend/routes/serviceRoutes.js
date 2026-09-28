@@ -91,6 +91,32 @@ router.post("/", async (req, res) => {
   }
 });
 
+// UPDATE SERVICE
+router.put("/:id", async (req, res) => {
+  try {
+    const updatedService = await Service.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    ).populate("provider", "name email phone location");
+
+    if (!updatedService) {
+      return res.status(404).json({
+        message: "Service not found"
+      });
+    }
+
+    res.json({
+      message: "Service updated successfully",
+      service: updatedService
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+});
+
 // DELETE SERVICE
 router.delete("/:id", async (req, res) => {
   try {
