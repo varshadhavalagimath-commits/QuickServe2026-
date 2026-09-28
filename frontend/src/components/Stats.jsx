@@ -9,7 +9,7 @@ function Stats() {
         </div>
 
         <div>
-          <h3>2,500+</h3>
+          <h3>250+</h3>
           <p>Happy Customers</p>
         </div>
       </div>
@@ -20,7 +20,7 @@ function Stats() {
         </div>
 
         <div>
-          <h3>500+</h3>
+          <h3>50+</h3>
           <p>Professional Services</p>
         </div>
       </div>
@@ -42,7 +42,7 @@ function Stats() {
         </div>
 
         <div>
-          <h3>4.8/5</h3>
+          <h3>4/5</h3>
           <p>Customer Rating</p>
         </div>
       </div>

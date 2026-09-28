@@ -45,17 +45,17 @@ function Hero() {
         <div className="hero-trust">
 
           <div>
-            <strong>500+</strong>
+            <strong>50+</strong>
             <span>Services</span>
           </div>
 
           <div>
-            <strong>200+</strong>
+            <strong>20+</strong>
             <span>Providers</span>
           </div>
 
           <div>
-            <strong>4.8★</strong>
+            <strong>4.5★</strong>
             <span>Average Rating</span>
           </div>
 
@@ -72,7 +72,7 @@ function Hero() {
           </div>
 
           <div className="floating-card card-one">
-            ⭐ 4.9 Rating
+            ⭐ 4 Rating
           </div>
 
           <div className="floating-card card-two">
