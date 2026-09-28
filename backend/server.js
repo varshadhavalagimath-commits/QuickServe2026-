@@ -263,6 +263,77 @@ app.delete("/api/bookings/:id", async (req, res) => {
 });
 
 
+// ======================================================
+// REVIEW APIs
+// ======================================================
+
+// Get all reviews
+app.get("/api/reviews", async (req, res) => {
+  const reviews = await Review.find();
+  res.json(reviews);
+});
+
+
+// Get reviews for a particular service
+app.get("/api/reviews/service/:serviceId", async (req, res) => {
+  const reviews = await Review.find({
+    serviceId: req.params.serviceId
+  });
+
+  res.json(reviews);
+});
+
+
+// Add review
+app.post("/api/reviews", async (req, res) => {
+  const newReview = await Review.create(req.body);
+
+  res.json({
+    message: "Review added successfully!",
+    review: newReview
+  });
+});
+
+
+// Update review
+app.put("/api/reviews/:id", async (req, res) => {
+  const updatedReview = await Review.findByIdAndUpdate(
+    req.params.id,
+    req.body,
+    { new: true }
+  );
+
+  if (!updatedReview) {
+    return res.status(404).json({
+      message: "Review not found!"
+    });
+  }
+
+  res.json({
+    message: "Review updated successfully!",
+    review: updatedReview
+  });
+});
+
+
+// Delete review
+app.delete("/api/reviews/:id", async (req, res) => {
+  const deletedReview = await Review.findByIdAndDelete(
+    req.params.id
+  );
+
+  if (!deletedReview) {
+    return res.status(404).json({
+      message: "Review Not Found!"
+    });
+  }
+
+  res.json({
+    message: "Review deleted successfully"
+  });
+});
+
+
 
 
 // ======================================================
