@@ -1,41 +1,103 @@
-import { useEffect, useState } from "react";
-
 import Hero from "../components/Hero";
 import Category from "../components/Category";
 import Stats from "../components/Stats";
-import ServiceCard from "../components/ServiceCard";
 
 function Home() {
-  const [featured, setFeatured] = useState([]);
-
-  useEffect(() => {
-    fetch("http://localhost:5000/api/services")
-      .then((res) => res.json())
-      .then((data) => setFeatured((data || []).slice(0, 6)))
-      .catch(() => setFeatured([]));
-  }, []);
 
   return (
-    <div>
+    <>
+
       <Hero />
 
       <Category />
 
-      <section className="featured-services">
+      <Stats />
+
+      <section className="how-section">
+
         <div className="section-heading">
-          <span>FEATURED SERVICES</span>
-          <h2>Popular near you</h2>
+
+          <span>
+            HOW IT WORKS
+          </span>
+
+          <h2>
+            Get your service in 3 simple steps
+          </h2>
+
         </div>
 
-        <div className="service-grid">
-          {featured.map((s) => (
-            <ServiceCard key={s._id} service={s} />
-          ))}
+        <div className="steps">
+
+          <div className="step">
+
+            <div className="step-number">
+              01
+            </div>
+
+            <div className="step-icon">
+              🔎
+            </div>
+
+            <h3>
+              Find a Service
+            </h3>
+
+            <p>
+              Search for the service
+              you need and explore
+              local providers.
+            </p>
+
+          </div>
+
+          <div className="step">
+
+            <div className="step-number">
+              02
+            </div>
+
+            <div className="step-icon">
+              📅
+            </div>
+
+            <h3>
+              Book a Provider
+            </h3>
+
+            <p>
+              Select your preferred
+              date, time and location.
+            </p>
+
+          </div>
+
+          <div className="step">
+
+            <div className="step-number">
+              03
+            </div>
+
+            <div className="step-icon">
+              ✓
+            </div>
+
+            <h3>
+              Get It Done
+            </h3>
+
+            <p>
+              Track your booking and
+              get your service completed.
+            </p>
+
+          </div>
+
         </div>
+
       </section>
 
-      <Stats />
-    </div>
+    </>
   );
 }
 

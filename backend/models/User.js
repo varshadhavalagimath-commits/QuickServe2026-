@@ -19,24 +19,17 @@ const userSchema = new mongoose.Schema(
     },
 
     phone: {
-      type: String,
-      default: ""
+      type: String
     },
 
     location: {
-      type: String,
-      default: ""
+      type: String
     },
 
     role: {
       type: String,
       enum: ["customer", "provider"],
       default: "customer"
-    },
-
-    profileImage: {
-      type: String,
-      default: ""
     }
   },
   {

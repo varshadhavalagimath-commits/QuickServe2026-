@@ -41,7 +41,14 @@ function Register() {
                 "application/json"
             },
 
-            body: JSON.stringify(form)
+            body: JSON.stringify({
+             name,
+             email,
+             password,
+             phone,
+             location,
+              role
+           })
           }
         );
 
