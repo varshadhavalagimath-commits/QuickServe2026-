@@ -4,76 +4,172 @@ import { useParams, useNavigate } from "react-router-dom";
 function ProviderProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const [provider, setProvider] = useState(null);
   const [services, setServices] = useState([]);
   const [reviews, setReviews] = useState({});
-  const [selectedService, setSelectedService] = useState(null);
+
+  const [loadingServices, setLoadingServices] = useState(true);
+  const [reviewErrors, setReviewErrors] = useState({});
 
   useEffect(() => {
-    async function load() {
+    let cancelled = false;
+
+    async function loadProvider() {
       try {
-        // Load provider details
-        const res = await fetch(`http://localhost:5000/api/providers/${id}`);
-        if (!res.ok) throw new Error("Not found");
+        const res = await fetch(
+          `http://localhost:5000/api/providers/${id}`
+        );
+
+        if (!res.ok) {
+          throw new Error("Provider not found");
+        }
+
         const data = await res.json();
-        setProvider(data);
+
+        if (!cancelled) {
+          setProvider(data);
+        }
       } catch (err) {
-        alert("Error loading provider: " + err.message);
+        console.error("Provider loading error:", err);
+
+        if (!cancelled) {
+          alert("Error loading provider: " + err.message);
+        }
       }
     }
-    load();
+
+    if (id) {
+      loadProvider();
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadServices() {
       try {
-        const res = await fetch(`http://localhost:5000/api/services`);
-        if (!res.ok) throw new Error("Failed to load services");
-        const data = await res.json();
-        
-        // Filter services for this provider
-        const providerServices = data.filter(s => s.provider._id === id);
-        setServices(providerServices);
-        
-        // Load reviews for each service
-        const reviewsMap = {};
-        for (const service of providerServices) {
-          try {
-            const reviewRes = await fetch(
-              `http://localhost:5000/api/reviews/service/${service._id}`
-            );
-            if (reviewRes.ok) {
-              const reviewData = await reviewRes.json();
-              reviewsMap[service._id] = reviewData;
-            }
-          } catch (err) {
-            console.error("Error loading reviews:", err);
-          }
+        setLoadingServices(true);
+
+        const res = await fetch("http://localhost:5000/api/services");
+
+        if (!res.ok) {
+          throw new Error("Failed to load services");
         }
-        setReviews(reviewsMap);
+
+        const data = await res.json();
+        const allServices = Array.isArray(data) ? data : data.services || [];
+
+        const providerServices = allServices.filter((service) => {
+          const serviceProviderId =
+            service.provider?._id ||
+            service.providerId?._id ||
+            service.providerId ||
+            service.provider;
+
+          return String(serviceProviderId) === String(id);
+        });
+
+        if (cancelled) return;
+
+        setServices(providerServices);
+
+        const reviewsMap = {};
+        const errorsMap = {};
+
+        await Promise.all(
+          providerServices.map(async (service) => {
+            try {
+              const reviewRes = await fetch(
+                `http://localhost:5000/api/reviews/service/${service._id}`
+              );
+
+              const reviewData = await reviewRes.json();
+
+              if (!reviewRes.ok) {
+                throw new Error(
+                  reviewData.message || "Failed to load reviews"
+                );
+              }
+
+              const reviewList = Array.isArray(reviewData)
+                ? reviewData
+                : Array.isArray(reviewData.reviews)
+                ? reviewData.reviews
+                : [];
+
+              reviewsMap[service._id] = reviewList;
+            } catch (error) {
+              console.error("Review fetching error:", service._id, error);
+              reviewsMap[service._id] = [];
+              errorsMap[service._id] = error.message;
+            }
+          })
+        );
+
+        if (!cancelled) {
+          setReviews(reviewsMap);
+          setReviewErrors(errorsMap);
+        }
       } catch (err) {
-        console.error("Error loading services:", err);
+        console.error("Service loading error:", err);
+      } finally {
+        if (!cancelled) {
+          setLoadingServices(false);
+        }
       }
     }
-    
-    if (provider) {
+
+    if (provider && id) {
       loadServices();
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [provider, id]);
 
   function canDelete() {
-    const user = JSON.parse(localStorage.getItem("quickserveUser") || "null");
-    return user && user._id === id;
+    const user = JSON.parse(
+      localStorage.getItem("quickserveUser") || "null"
+    );
+
+    return user && String(user._id) === String(id);
   }
 
   async function handleDelete() {
-    if (!confirm("Are you sure you want to delete your account? This cannot be undone.")) return;
-    try {
-      const user = JSON.parse(localStorage.getItem("quickserveUser") || "null");
-      if (!user) return alert("Not logged in");
+    if (
+      !window.confirm(
+        "Are you sure you want to delete your account? This cannot be undone."
+      )
+    ) {
+      return;
+    }
 
-      const res = await fetch(`http://localhost:5000/api/users/${user._id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Delete failed");
+    try {
+      const user = JSON.parse(
+        localStorage.getItem("quickserveUser") || "null"
+      );
+
+      if (!user) {
+        return alert("Not logged in");
+      }
+
+      const res = await fetch(
+        `http://localhost:5000/api/users/${user._id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Delete failed");
+      }
+
       localStorage.removeItem("quickserveUser");
       alert("Account deleted");
       navigate("/");
@@ -82,7 +178,13 @@ function ProviderProfile() {
     }
   }
 
-  if (!provider) return <div className="provider-profile"><p>Loading...</p></div>;
+  if (!provider) {
+    return (
+      <div className="provider-profile">
+        <p>Loading provider profile...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="provider-profile">
@@ -90,10 +192,13 @@ function ProviderProfile() {
         <div className="provider-avatar-large">
           {provider.name?.charAt(0)?.toUpperCase()}
         </div>
+
         <div className="provider-info">
           <h1>{provider.name}</h1>
+
           <p>📍 {provider.location || "Location not set"}</p>
           <p>📞 {provider.phone}</p>
+
           {provider.servicesProvided && (
             <p>🏷️ Services: {provider.servicesProvided.join(", ")}</p>
           )}
@@ -108,48 +213,68 @@ function ProviderProfile() {
 
       <div className="services-reviews-section">
         <h2>Services Offered</h2>
-        
-        {services.length === 0 ? (
+
+        {loadingServices ? (
+          <p>Loading services...</p>
+        ) : services.length === 0 ? (
           <p className="no-services">No services added yet</p>
         ) : (
           <div className="services-list">
-            {services.map(service => (
-              <div key={service._id} className="service-review-card">
-                <div className="service-header">
-                  <h3>{service.title}</h3>
-                  <span className="service-price">₹{service.price}</span>
-                </div>
-                
-                <p className="service-desc">{service.description}</p>
-                
-                <div className="service-meta">
-                  <span>📂 {service.category}</span>
-                  <span>📍 {service.location}</span>
-                  <span>⭐ {service.rating} ({service.totalReviews} reviews)</span>
-                </div>
+            {services.map((service) => {
+              const serviceReviews = reviews[service._id] || [];
 
-                <button
-                  className="view-reviews-button"
-                  onClick={() => setSelectedService(selectedService === service._id ? null : service._id)}
-                >
-                  {selectedService === service._id ? "Hide Reviews" : "View Reviews"}
-                </button>
+              return (
+                <div key={service._id} className="service-review-card">
+                  <div className="service-header">
+                    <h3>{service.title || service.name}</h3>
+                    <span className="service-price">₹{service.price}</span>
+                  </div>
 
-                {selectedService === service._id && (
+                  <p className="service-desc">{service.description}</p>
+
+                  <div className="service-meta">
+                    <span>📂 {service.category}</span>
+                    <span>📍 {service.location}</span>
+                    <span>
+                      ⭐ {service.rating || 0} ({service.totalReviews ?? serviceReviews.length} reviews)
+                    </span>
+                  </div>
+
                   <div className="reviews-section">
                     <h4>Customer Reviews</h4>
-                    {reviews[service._id] && reviews[service._id].length > 0 ? (
+
+                    {reviewErrors[service._id] ? (
+                      <p className="no-reviews">
+                        Unable to load reviews: {reviewErrors[service._id]}
+                      </p>
+                    ) : serviceReviews.length > 0 ? (
                       <div className="reviews-list">
-                        {reviews[service._id].map(review => (
-                          <div key={review._id} className="review-item">
-                            <div className="review-header">
-                              <strong>{review.customer?.name || "Anonymous"}</strong>
-                              <span className="review-rating">⭐ {review.rating}/5</span>
+                        {serviceReviews.map((review) => (
+                          <div key={review._id} className="review-message-row">
+                            <div className="review-message-avatar">
+                              {(review.customerName || review.customer?.name || "A")
+                                .charAt(0)
+                                .toUpperCase()}
                             </div>
-                            <p className="review-comment">{review.comment}</p>
-                            <small className="review-date">
-                              {new Date(review.createdAt).toLocaleDateString()}
-                            </small>
+
+                            <div className="review-message-bubble">
+                              <div className="review-message-top">
+                                <strong>
+                                  {review.customerName || review.customer?.name || "Anonymous"}
+                                </strong>
+                                <span className="review-rating">
+                                  ⭐ {review.rating}/5
+                                </span>
+                              </div>
+
+                              <p className="review-comment">“{review.comment}”</p>
+
+                              <small className="review-date">
+                                {review.createdAt
+                                  ? new Date(review.createdAt).toLocaleDateString()
+                                  : "Recent"}
+                              </small>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -157,9 +282,9 @@ function ProviderProfile() {
                       <p className="no-reviews">No reviews yet</p>
                     )}
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

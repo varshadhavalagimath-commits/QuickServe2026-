@@ -32,6 +32,18 @@ const categories = [
   {
     icon: "🌿",
     name: "Gardening"
+  },
+  {
+    icon:"🚚",
+    name:"Logistics"
+  },
+  {
+    icon:"🏡",
+    name:"Home Remodeling"
+  },
+  {
+    icon:"👴👶",
+    name:"Elder Care & Childcare Service"
   }
 ];
 
